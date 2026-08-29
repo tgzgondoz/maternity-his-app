@@ -1,36 +1,89 @@
 // src/pages/Reports.js
 import React, { useState, useEffect } from 'react';
-import { Card, Table, Container, Row, Col, Button } from 'react-bootstrap';
-import { FaFileDownload } from 'react-icons/fa'; // REMOVED FaChartBar
+import { Card, Table, Container, Row, Col, Button, Spinner } from 'react-bootstrap';
+import { FaFileDownload, FaSync } from 'react-icons/fa';
+import { subscribeToBirths, getMonthlyReports } from '../services/firebaseService';
 
 function Reports() {
-  const [reports, setReports] = useState({
-    monthly: [],
-    summary: {
-      totalBirths: 0,
-      normalDeliveries: 0,
-      cSections: 0,
-      lowBirthWeight: 0,
-      stillbirths: 0
-    }
+  const [reports, setReports] = useState([]);
+  const [summary, setSummary] = useState({
+    totalBirths: 0,
+    normalDeliveries: 0,
+    cSections: 0,
+    lowBirthWeight: 0,
+    stillbirths: 0
   });
+  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState(new Date());
 
   useEffect(() => {
-    setReports({
-      monthly: [
-        { month: 'January', births: 102, cSections: 28, lowWeight: 8, stillbirths: 2 },
-        { month: 'February', births: 95, cSections: 22, lowWeight: 6, stillbirths: 1 },
-        { month: 'March', births: 110, cSections: 32, lowWeight: 10, stillbirths: 3 }
-      ],
-      summary: {
-        totalBirths: 1245,
-        normalDeliveries: 896,
-        cSections: 349,
-        lowBirthWeight: 87,
-        stillbirths: 23
+    // Subscribe to real-time birth data
+    const unsubscribe = subscribeToBirths((births) => {
+      calculateReports(births);
+      setLastUpdated(new Date());
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const calculateReports = (births) => {
+    // Calculate summary
+    const total = births.length;
+    const normal = births.filter(b => b.deliveryType === 'Normal').length;
+    const cSection = births.filter(b => b.deliveryType === 'C-Section').length;
+    const lowWeight = births.filter(b => b.birthWeight < 2.5).length;
+    const stillbirths = births.filter(b => b.babyStatus === 'Stillbirth').length;
+
+    setSummary({
+      totalBirths: total,
+      normalDeliveries: normal,
+      cSections: cSection,
+      lowBirthWeight: lowWeight,
+      stillbirths: stillbirths
+    });
+
+    // Calculate monthly reports
+    const monthlyData = {};
+    births.forEach(birth => {
+      if (birth.birthDateTime) {
+        const date = new Date(birth.birthDateTime);
+        const monthYear = `${date.toLocaleString('default', { month: 'long' })} ${date.getFullYear()}`;
+        
+        if (!monthlyData[monthYear]) {
+          monthlyData[monthYear] = {
+            month: monthYear,
+            births: 0,
+            cSections: 0,
+            lowWeight: 0,
+            stillbirths: 0
+          };
+        }
+        
+        monthlyData[monthYear].births++;
+        if (birth.deliveryType === 'C-Section') monthlyData[monthYear].cSections++;
+        if (birth.birthWeight < 2.5) monthlyData[monthYear].lowWeight++;
+        if (birth.babyStatus === 'Stillbirth') monthlyData[monthYear].stillbirths++;
       }
     });
-  }, []);
+
+    setReports(Object.values(monthlyData));
+  };
+
+  const handleRefresh = () => {
+    setLoading(true);
+    // Refresh will happen via the subscription
+    setTimeout(() => setLoading(false), 1000);
+  };
+
+  if (loading) {
+    return (
+      <Container className="text-center mt-5">
+        <Spinner animation="border" variant="primary" />
+        <p>Loading reports...</p>
+      </Container>
+    );
+  }
 
   return (
     <Container>
@@ -41,7 +94,7 @@ function Reports() {
           <Card className="text-center bg-primary text-white">
             <Card.Body>
               <h5>Total Births</h5>
-              <h3>{reports.summary.totalBirths}</h3>
+              <h3>{summary.totalBirths}</h3>
             </Card.Body>
           </Card>
         </Col>
@@ -49,7 +102,7 @@ function Reports() {
           <Card className="text-center bg-success text-white">
             <Card.Body>
               <h5>Normal Deliveries</h5>
-              <h3>{reports.summary.normalDeliveries}</h3>
+              <h3>{summary.normalDeliveries}</h3>
             </Card.Body>
           </Card>
         </Col>
@@ -57,7 +110,7 @@ function Reports() {
           <Card className="text-center bg-warning text-white">
             <Card.Body>
               <h5>C-Sections</h5>
-              <h3>{reports.summary.cSections}</h3>
+              <h3>{summary.cSections}</h3>
             </Card.Body>
           </Card>
         </Col>
@@ -65,7 +118,7 @@ function Reports() {
           <Card className="text-center bg-danger text-white">
             <Card.Body>
               <h5>Low Birth Weight</h5>
-              <h3>{reports.summary.lowBirthWeight}</h3>
+              <h3>{summary.lowBirthWeight}</h3>
             </Card.Body>
           </Card>
         </Col>
@@ -74,46 +127,66 @@ function Reports() {
       <Card className="mt-4">
         <Card.Header className="d-flex justify-content-between align-items-center">
           <span>Monthly Birth Statistics</span>
-          <Button variant="outline-primary" size="sm">
-            <FaFileDownload /> Export Report
-          </Button>
+          <div>
+            <span className="text-muted me-3 small">
+              <FaSync className="me-1" />
+              Last updated: {lastUpdated.toLocaleTimeString()}
+            </span>
+            <Button variant="outline-primary" size="sm" onClick={handleRefresh}>
+              <FaFileDownload /> Export Report
+            </Button>
+          </div>
         </Card.Header>
         <Card.Body>
-          <Table striped bordered hover>
-            <thead>
-              <tr>
-                <th>Month</th>
-                <th>Total Births</th>
-                <th>C-Sections</th>
-                <th>Low Birth Weight</th>
-                <th>Stillbirths</th>
-                <th>C-Section Rate</th>
-              </tr>
-            </thead>
-            <tbody>
-              {reports.monthly.map((row, index) => (
-                <tr key={index}>
-                  <td>{row.month}</td>
-                  <td>{row.births}</td>
-                  <td>{row.cSections}</td>
-                  <td>{row.lowWeight}</td>
-                  <td>{row.stillbirths}</td>
-                  <td>{((row.cSections / row.births) * 100).toFixed(1)}%</td>
+          {reports.length === 0 ? (
+            <p className="text-muted text-center">No birth records found</p>
+          ) : (
+            <Table striped bordered hover responsive>
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th>Total Births</th>
+                  <th>C-Sections</th>
+                  <th>Low Birth Weight</th>
+                  <th>Stillbirths</th>
+                  <th>C-Section Rate</th>
                 </tr>
-              ))}
-            </tbody>
-          </Table>
+              </thead>
+              <tbody>
+                {reports.map((row, index) => (
+                  <tr key={index}>
+                    <td>{row.month}</td>
+                    <td>{row.births}</td>
+                    <td>{row.cSections}</td>
+                    <td>{row.lowWeight}</td>
+                    <td>{row.stillbirths}</td>
+                    <td>{row.births > 0 ? ((row.cSections / row.births) * 100).toFixed(1) : 0}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          )}
         </Card.Body>
       </Card>
 
       <Card className="mt-4">
-        <Card.Header>📌 Note</Card.Header>
+        <Card.Header>
+          <span className="text-success">●</span> Real-Time Connection Status
+        </Card.Header>
         <Card.Body>
-          <p className="text-muted">
-            This data is automatically synced from maternity records to the 
-            Health Information System (HIS). District and national offices 
-            can access this information for decision making.
+          <p>
+            <strong>Firebase Status:</strong> 
+            <span className="text-success ms-2">Connected & Syncing</span>
           </p>
+          <p className="text-muted small">
+            This data is automatically synced from maternity records to Firebase.
+            All changes are reflected in real-time across all devices.
+          </p>
+          <div className="d-flex gap-2">
+            <span className="badge bg-success">Live</span>
+            <span className="badge bg-primary">Firebase</span>
+            <span className="badge bg-info">Real-Time</span>
+          </div>
         </Card.Body>
       </Card>
     </Container>

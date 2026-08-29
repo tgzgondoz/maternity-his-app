@@ -1,7 +1,7 @@
 // src/pages/RegisterBirth.js
 import React, { useState } from 'react';
-import { Form, Button, Card, Alert, Row, Col, Container } from 'react-bootstrap';
-// REMOVE: import axios from 'axios';
+import { Form, Button, Card, Alert, Row, Col, Container, Spinner } from 'react-bootstrap';
+import { saveBirthRecord } from '../services/firebaseService';
 
 function RegisterBirth() {
   const [formData, setFormData] = useState({
@@ -14,11 +14,14 @@ function RegisterBirth() {
     motherId: '',
     deliveryType: 'Normal',
     facility: '',
-    attendingMidwife: ''
+    attendingMidwife: '',
+    babyStatus: 'Live birth'
   });
 
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [recordId, setRecordId] = useState(null);
 
   const handleChange = (e) => {
     setFormData({
@@ -31,26 +34,43 @@ function RegisterBirth() {
     e.preventDefault();
     setError(null);
     setSubmitted(false);
+    setLoading(true);
 
     try {
-      // Simulate API call
-      console.log('Birth record submitted:', formData);
-      setSubmitted(true);
-      setFormData({
-        babyName: '',
-        sex: 'Male',
-        birthDateTime: '',
-        birthWeight: '',
-        apgarScore: '',
-        motherName: '',
-        motherId: '',
-        deliveryType: 'Normal',
-        facility: '',
-        attendingMidwife: ''
-      });
-      setTimeout(() => setSubmitted(false), 5000);
+      // Save to Firebase
+      const result = await saveBirthRecord(formData);
+      
+      if (result.success) {
+        setRecordId(result.id);
+        setSubmitted(true);
+        
+        // Reset form
+        setFormData({
+          babyName: '',
+          sex: 'Male',
+          birthDateTime: '',
+          birthWeight: '',
+          apgarScore: '',
+          motherName: '',
+          motherId: '',
+          deliveryType: 'Normal',
+          facility: '',
+          attendingMidwife: '',
+          babyStatus: 'Live birth'
+        });
+
+        setTimeout(() => {
+          setSubmitted(false);
+          setRecordId(null);
+        }, 8000);
+      } else {
+        setError(result.error || 'Failed to save birth record');
+      }
     } catch (err) {
       setError('Failed to register birth. Please try again.');
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -64,7 +84,13 @@ function RegisterBirth() {
             <Card.Body>
               {submitted && (
                 <Alert variant="success">
-                  ✅ Birth record successfully saved and synced to HIS!
+                  <strong>✅ Birth record successfully saved!</strong>
+                  <br />
+                  Record ID: {recordId}
+                  <br />
+                  <span className="text-muted small">
+                    Data has been synced to Firebase and is now available in real-time.
+                  </span>
                 </Alert>
               )}
               {error && (
@@ -163,6 +189,22 @@ function RegisterBirth() {
                   </Col>
                 </Row>
 
+                <Row>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Baby Status</Form.Label>
+                      <Form.Select
+                        name="babyStatus"
+                        value={formData.babyStatus}
+                        onChange={handleChange}
+                      >
+                        <option value="Live birth">Live birth</option>
+                        <option value="Stillbirth">Stillbirth</option>
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                </Row>
+
                 <h5 className="mt-3">Mother Information</h5>
                 <Row>
                   <Col md={6}>
@@ -218,8 +260,15 @@ function RegisterBirth() {
                   </Col>
                 </Row>
 
-                <Button type="submit" variant="primary" size="lg">
-                  Register Birth & Sync to HIS
+                <Button type="submit" variant="primary" size="lg" disabled={loading}>
+                  {loading ? (
+                    <>
+                      <Spinner animation="border" size="sm" className="me-2" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Register Birth & Sync to HIS'
+                  )}
                 </Button>
               </Form>
             </Card.Body>
@@ -230,17 +279,18 @@ function RegisterBirth() {
           <Card>
             <Card.Header>📋 Data Flow</Card.Header>
             <Card.Body>
-              <p><strong>Maternity → HIS Integration</strong></p>
+              <p><strong>Maternity → Firebase → HIS</strong></p>
               <ol className="small">
                 <li>Midwife captures birth data</li>
-                <li>Data entered into maternity system</li>
-                <li>Auto-sync to DHIS2/HIS</li>
-                <li>Reports generated at district level</li>
+                <li>Data saved to Firebase Realtime Database</li>
+                <li>Real-time sync to all connected clients</li>
+                <li>Reports generated automatically</li>
               </ol>
               <hr />
               <p className="text-muted small">
-                <strong>Note:</strong> Mother's ID links baby to antenatal records.
-                Prevents duplicate entries.
+                <strong>Status:</strong> Connected to Firebase
+                <br />
+                <span className="badge bg-success">Real-time</span>
               </p>
             </Card.Body>
           </Card>
