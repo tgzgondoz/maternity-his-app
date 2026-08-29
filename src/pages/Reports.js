@@ -1,7 +1,8 @@
+// src/pages/Reports.js
 import React, { useState, useEffect } from 'react';
 import { Card, Table, Container, Row, Col, Button, Spinner, Alert } from 'react-bootstrap';
 import { FaFileDownload, FaSync, FaClock } from 'react-icons/fa';
-import { subscribeToBirths, getMonthlyReports } from '../services/firebaseService';
+import { subscribeToBirths } from '../services/firebaseService'; // REMOVED getMonthlyReports
 import DashboardStats from '../components/DashboardStats';
 
 function Reports() {
@@ -20,11 +21,10 @@ function Reports() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const unsubscribe = subscribeToBirths(async (births) => {
+    const unsubscribe = subscribeToBirths((births) => {
       try {
         calculateReports(births);
-        const monthlyData = await getMonthlyReports();
-        setReports(monthlyData);
+        calculateMonthlyReports(births);
         setLastUpdated(new Date());
         setLoading(false);
       } catch (err) {
@@ -57,6 +57,33 @@ function Reports() {
       cSectionRate: total > 0 ? ((cSection / total) * 100).toFixed(1) : 0,
       todayBirths: todayBirths
     });
+  };
+
+  const calculateMonthlyReports = (births) => {
+    const monthlyData = {};
+    births.forEach(birth => {
+      if (birth.birthDateTime) {
+        const date = new Date(birth.birthDateTime);
+        const monthYear = `${date.toLocaleString('default', { month: 'long' })} ${date.getFullYear()}`;
+        
+        if (!monthlyData[monthYear]) {
+          monthlyData[monthYear] = {
+            month: monthYear,
+            births: 0,
+            cSections: 0,
+            lowWeight: 0,
+            stillbirths: 0
+          };
+        }
+        
+        monthlyData[monthYear].births++;
+        if (birth.deliveryType === 'C-Section') monthlyData[monthYear].cSections++;
+        if (birth.birthWeight < 2.5) monthlyData[monthYear].lowWeight++;
+        if (birth.babyStatus === 'Stillbirth') monthlyData[monthYear].stillbirths++;
+      }
+    });
+    
+    setReports(Object.values(monthlyData));
   };
 
   const exportData = () => {
