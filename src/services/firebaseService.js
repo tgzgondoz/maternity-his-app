@@ -1,9 +1,19 @@
-// src/services/firebaseService.js
-import { database, ref, push, set, onValue, query, orderByChild, equalTo, get, update, remove } from '../firebase/config';
+import { 
+  database, 
+  ref, 
+  push, 
+  set, 
+  onValue, 
+  query, 
+  orderByChild, 
+  equalTo, 
+  get, 
+  update, 
+  remove 
+} from '../firebase/config';
 
 // ==================== BIRTH RECORDS ====================
 
-// Save a new birth record
 export const saveBirthRecord = async (birthData) => {
   try {
     const birthRef = ref(database, 'births');
@@ -23,6 +33,7 @@ export const saveBirthRecord = async (birthData) => {
       deliveryType: birthData.deliveryType || 'Normal',
       facility: birthData.facility || '',
       attendingMidwife: birthData.attendingMidwife || '',
+      babyStatus: birthData.babyStatus || 'Live birth',
       createdAt: new Date().toISOString(),
       syncedToHIS: true
     };
@@ -35,7 +46,6 @@ export const saveBirthRecord = async (birthData) => {
   }
 };
 
-// Get all birth records (real-time)
 export const subscribeToBirths = (callback) => {
   const birthsRef = ref(database, 'births');
   return onValue(birthsRef, (snapshot) => {
@@ -52,7 +62,6 @@ export const subscribeToBirths = (callback) => {
   });
 };
 
-// Get birth records by mother ID
 export const getBirthsByMother = async (motherId) => {
   try {
     const birthsRef = ref(database, 'births');
@@ -73,7 +82,6 @@ export const getBirthsByMother = async (motherId) => {
   }
 };
 
-// Update birth record
 export const updateBirthRecord = async (id, updates) => {
   try {
     const birthRef = ref(database, `births/${id}`);
@@ -88,7 +96,6 @@ export const updateBirthRecord = async (id, updates) => {
   }
 };
 
-// Delete birth record
 export const deleteBirthRecord = async (id) => {
   try {
     const birthRef = ref(database, `births/${id}`);
@@ -102,7 +109,6 @@ export const deleteBirthRecord = async (id) => {
 
 // ==================== STATISTICS ====================
 
-// Get real-time statistics
 export const subscribeToStats = (callback) => {
   const birthsRef = ref(database, 'births');
   return onValue(birthsRef, (snapshot) => {
@@ -113,7 +119,7 @@ export const subscribeToStats = (callback) => {
       const totalBirths = birthsArray.length;
       const today = new Date().toDateString();
       const todayBirths = birthsArray.filter(b => 
-        new Date(b.birthDateTime).toDateString() === today
+        b.birthDateTime && new Date(b.birthDateTime).toDateString() === today
       ).length;
       
       const normalDeliveries = birthsArray.filter(b => b.deliveryType === 'Normal').length;
@@ -148,7 +154,6 @@ export const subscribeToStats = (callback) => {
 
 // ==================== REPORTS ====================
 
-// Get monthly report data
 export const getMonthlyReports = async () => {
   try {
     const birthsRef = ref(database, 'births');
@@ -159,63 +164,32 @@ export const getMonthlyReports = async () => {
     const data = snapshot.val();
     const birthsArray = Object.keys(data).map(key => data[key]);
     
-    // Group by month
     const monthlyData = {};
     birthsArray.forEach(birth => {
-      const date = new Date(birth.birthDateTime);
-      const monthYear = `${date.toLocaleString('default', { month: 'long' })} ${date.getFullYear()}`;
-      
-      if (!monthlyData[monthYear]) {
-        monthlyData[monthYear] = {
-          month: monthYear,
-          births: 0,
-          cSections: 0,
-          lowWeight: 0,
-          stillbirths: 0
-        };
+      if (birth.birthDateTime) {
+        const date = new Date(birth.birthDateTime);
+        const monthYear = `${date.toLocaleString('default', { month: 'long' })} ${date.getFullYear()}`;
+        
+        if (!monthlyData[monthYear]) {
+          monthlyData[monthYear] = {
+            month: monthYear,
+            births: 0,
+            cSections: 0,
+            lowWeight: 0,
+            stillbirths: 0
+          };
+        }
+        
+        monthlyData[monthYear].births++;
+        if (birth.deliveryType === 'C-Section') monthlyData[monthYear].cSections++;
+        if (birth.birthWeight < 2.5) monthlyData[monthYear].lowWeight++;
+        if (birth.babyStatus === 'Stillbirth') monthlyData[monthYear].stillbirths++;
       }
-      
-      monthlyData[monthYear].births++;
-      if (birth.deliveryType === 'C-Section') monthlyData[monthYear].cSections++;
-      if (birth.birthWeight < 2.5) monthlyData[monthYear].lowWeight++;
-      if (birth.babyStatus === 'Stillbirth') monthlyData[monthYear].stillbirths++;
     });
     
     return Object.values(monthlyData);
   } catch (error) {
     console.error('Error getting monthly reports:', error);
     return [];
-  }
-};
-
-// ==================== MOTHERS ====================
-
-// Save mother data
-export const saveMother = async (motherData) => {
-  try {
-    const motherRef = ref(database, `mothers/${motherData.motherId}`);
-    await set(motherRef, {
-      ...motherData,
-      createdAt: new Date().toISOString()
-    });
-    return { success: true };
-  } catch (error) {
-    console.error('Error saving mother:', error);
-    return { success: false, error: error.message };
-  }
-};
-
-// Get mother data
-export const getMotherById = async (motherId) => {
-  try {
-    const motherRef = ref(database, `mothers/${motherId}`);
-    const snapshot = await get(motherRef);
-    if (snapshot.exists()) {
-      return { success: true, data: snapshot.val() };
-    }
-    return { success: false, data: null };
-  } catch (error) {
-    console.error('Error fetching mother:', error);
-    return { success: false, error: error.message };
   }
 };

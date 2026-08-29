@@ -1,4 +1,3 @@
-/* src/App.css */
 .App {
   text-align: center;
 }
@@ -35,5 +34,21 @@
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* Custom Animations */
+.fade-in {
+  animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
