@@ -166,17 +166,6 @@ function Login({ onLogin }) {
                   </Button>
                 </Form>
 
-                <div className="text-center mt-4">
-                  <p className="text-muted small mb-0">
-                    <strong>Demo Credentials:</strong>
-                  </p>
-                  <p className="text-muted small">
-                    Username: <code className="bg-light px-2 py-1 rounded">admin</code>
-                    <br />
-                    Password: <code className="bg-light px-2 py-1 rounded">admin123</code>
-                  </p>
-                </div>
-
                 <hr className="my-4" />
 
                 <div className="text-center">
